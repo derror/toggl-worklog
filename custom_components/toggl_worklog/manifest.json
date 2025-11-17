@@ -1,0 +1,12 @@
+{
+  "domain": "toggl_worklog",
+  "name": "Toggl Worklog",
+  "config_flow": true,
+  "documentation": "https://github.com/derror/toggl-worklog",
+  "issue_tracker": "https://github.com/derror/toggl-worklog/issues",
+  "requirements": ["requests>=2.31.0"],
+  "dependencies": [],
+  "codeowners": ["@derror"],
+  "version": "1.0.0",
+  "iot_class": "cloud_polling"
+}

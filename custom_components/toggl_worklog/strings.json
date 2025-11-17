@@ -1,0 +1,51 @@
+{
+  "config": {
+    "title": "Toggl Worklog",
+    "step": {
+      "user": {
+        "title": "Connect to Toggl",
+        "description": "Set up Toggl Worklog integration to track your time entries. You will need your Toggl API token and Workspace ID.",
+        "data": {
+          "api_token": "API Token",
+          "workspace_id": "Workspace ID"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Toggl API. Please check your internet connection and try again.",
+      "invalid_auth": "Invalid authentication. Please check your API token and try again.",
+      "unknown": "An unexpected error occurred. Please check the logs for more information."
+    },
+    "abort": {
+      "already_configured": "This Toggl Workspace is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Toggl Worklog Options",
+        "description": "Configure synchronization settings and timesheet data sync.",
+        "data": {
+          "scan_interval": "Update Interval",
+          "sync_months": "Synchronize timesheet data for the last:"
+        },
+        "data_description": {
+          "scan_interval": "How often to fetch data from Toggl API (to avoid rate limits, use 1 hour or more)",
+          "sync_months": "Fetch historical time entries"
+        }
+      }
+    }
+  },
+  "services": {
+    "sync_timesheet": {
+      "name": "Sync Timesheet",
+      "description": "Synchronize timesheet data for a specific period.",
+      "fields": {
+        "sync_months": {
+          "name": "Months",
+          "description": "Number of months to synchronize (1-12)."
+        }
+      }
+    }
+  }
+}

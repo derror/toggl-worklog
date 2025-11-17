@@ -1,0 +1,2 @@
+requests>=2.25.0
+voluptuous>=0.13.1
