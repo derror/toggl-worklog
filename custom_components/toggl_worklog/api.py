@@ -53,7 +53,7 @@ class TogglApi:
         retry_strategy = Retry(
             total=API_MAX_RETRIES,
             backoff_factor=API_BACKOFF_FACTOR,
-            status_forcelist=[429, 500, 502, 503, 504],
+            status_forcelist=[402, 429, 500, 502, 503, 504],
             allowed_methods=["GET", "POST"],
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
