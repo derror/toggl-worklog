@@ -11,6 +11,7 @@ from urllib3.util.retry import Retry
 from .const import (
     API_ME_ENDPOINT,
     API_TIME_ENTRIES_ENDPOINT,
+    API_V9_TIME_ENTRIES_ENDPOINT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,12 +61,12 @@ class TogglApi:
         session.mount("https://", adapter)
         return session
 
-    def _make_request(self, method: str, url: str, json: Optional[Dict] = None) -> Any:
+    def _make_request(self, method: str, url: str, json: Optional[Dict] = None, params: Optional[Dict] = None) -> Any:
         """Make a request to the Toggl API."""
         token_preview = f"{self.api_token[:4]}...{self.api_token[-4:]}" if len(self.api_token) > 8 else "***"
         _LOGGER.debug(
-            "Making request to Toggl API: %s %s with json %s (workspace: %s, token: %s)",
-            method, url, json, self.workspace_id, token_preview
+            "Making request to Toggl API: %s %s with json %s params %s (workspace: %s, token: %s)",
+            method, url, json, params, self.workspace_id, token_preview
         )
 
         try:
@@ -74,6 +75,7 @@ class TogglApi:
                 url,
                 auth=self.auth,
                 json=json,
+                params=params,
                 timeout=API_TIMEOUT,
             )
             _LOGGER.debug("Toggl API response status: %s", response.status_code)
@@ -105,35 +107,56 @@ class TogglApi:
             raise TogglApiError(f"Unexpected error in API request: {err}") from err
 
     def _fetch_raw_time_entries(self, start_date: date, end_date: date) -> List[Dict]:
-        """Fetch raw time entry groupings within a date range using the reports API."""
-        endpoint = API_TIME_ENTRIES_ENDPOINT.format(workspace_id=self.workspace_id)
-        
-        payload = {
-            "start_date": start_date.isoformat(),
-            "end_date": end_date.isoformat(),
+        """Fetch time entries within a date range using the Time Entries API v9."""
+        # Convert dates to ISO 8601 format with time component
+        start_datetime = f"{start_date.isoformat()}T00:00:00Z"
+        end_datetime = f"{end_date.isoformat()}T23:59:59Z"
+
+        params = {
+            "start_date": start_datetime,
+            "end_date": end_datetime,
         }
 
-        _LOGGER.debug("Getting raw time entries from %s to %s", start_date, end_date)
+        _LOGGER.debug("Getting time entries from %s to %s", start_date, end_date)
 
         try:
-            entries = self._make_request("POST", endpoint, json=payload)
-            _LOGGER.debug("Got %d raw groupings", len(entries) if entries else 0)
+            entries = self._make_request("GET", API_V9_TIME_ENTRIES_ENDPOINT, params=params)
+            _LOGGER.debug("Got %d time entries", len(entries) if entries else 0)
             return entries if entries else []
         except TogglApiError as err:
-            _LOGGER.error("Error getting raw time entries: %s", err)
+            _LOGGER.error("Error getting time entries: %s", err)
             return []
         except Exception as err:
-            _LOGGER.error("Unexpected error getting raw time entries: %s", err)
+            _LOGGER.error("Unexpected error getting time entries: %s", err)
             return []
 
     def get_time_entries(self, start_date: date, end_date: date) -> List[Dict]:
-        """Get a flattened list of individual time entries within a date range."""
-        raw_groupings = self._fetch_raw_time_entries(start_date, end_date)
-        flattened_entries = []
-        for grouping in raw_groupings:
-            flattened_entries.extend(grouping.get('time_entries', []))
-        _LOGGER.debug("Flattened %d raw groupings into %d individual time entries", len(raw_groupings), len(flattened_entries))
-        return flattened_entries
+        """Get a list of individual time entries within a date range."""
+        entries = self._fetch_raw_time_entries(start_date, end_date)
+
+        # Convert v9 API format to our internal format
+        normalized_entries = []
+        for entry in entries:
+            # v9 API returns 'duration' in seconds (positive for completed, negative for running)
+            duration = entry.get('duration', 0)
+
+            # Skip running entries (negative duration)
+            if duration < 0:
+                continue
+
+            normalized_entry = {
+                'id': entry.get('id'),
+                'start': entry.get('start'),
+                'stop': entry.get('stop'),
+                'seconds': duration,  # Already in seconds
+                'description': entry.get('description'),
+                'project_id': entry.get('project_id'),
+                'task_id': entry.get('task_id'),
+            }
+            normalized_entries.append(normalized_entry)
+
+        _LOGGER.debug("Normalized %d time entries", len(normalized_entries))
+        return normalized_entries
 
     def _filter_entries_by_date(self, entries: List[Dict], start_date: date, end_date: date) -> List[Dict]:
         """Filter a flattened list of time entries by a given date range."""
@@ -146,6 +169,36 @@ class TogglApi:
                 entry_date = datetime.fromisoformat(entry_start_str).date()
                 if start_date <= entry_date <= end_date:
                     filtered_entries.append(entry)
+        return filtered_entries
+
+    def _filter_entries_by_timestamp(self, entries: List[Dict], hours_ago: int) -> List[Dict]:
+        """Filter entries that started within the last N hours from now.
+
+        Args:
+            entries: List of time entries to filter
+            hours_ago: Number of hours to look back from now
+
+        Returns:
+            Filtered list of entries
+        """
+        now = datetime.now()
+        cutoff_time = now - timedelta(hours=hours_ago)
+
+        filtered_entries = []
+        for entry in entries:
+            entry_start_str = entry.get('start')
+            if entry_start_str:
+                # Parse the full timestamp including timezone
+                entry_start = datetime.fromisoformat(entry_start_str)
+
+                # Remove timezone info for comparison (convert to naive datetime)
+                if entry_start.tzinfo is not None:
+                    # Convert to UTC then remove tzinfo for comparison
+                    entry_start = entry_start.replace(tzinfo=None)
+
+                if cutoff_time.replace(tzinfo=None) <= entry_start:
+                    filtered_entries.append(entry)
+
         return filtered_entries
 
     def _get_all_entries_for_sync_period(self) -> List[Dict]:
@@ -162,25 +215,19 @@ class TogglApi:
         return all_entries
 
     def get_daily_time_entries(self) -> List[Dict]:
-        """Get time entries for the last 24 hours."""
-        today = date.today()
-        start_date = today - timedelta(days=1)
+        """Get time entries for the last 24 hours (from now)."""
         all_entries = self._get_all_entries_for_sync_period()
-        return self._filter_entries_by_date(all_entries, start_date, today)
+        return self._filter_entries_by_timestamp(all_entries, hours_ago=24)
 
     def get_weekly_time_entries(self) -> List[Dict]:
-        """Get time entries for the last 7 days."""
-        today = date.today()
-        start_date = today - timedelta(days=7)
+        """Get time entries for the last 7 days (168 hours from now)."""
         all_entries = self._get_all_entries_for_sync_period()
-        return self._filter_entries_by_date(all_entries, start_date, today)
+        return self._filter_entries_by_timestamp(all_entries, hours_ago=168)
 
     def get_monthly_time_entries(self) -> List[Dict]:
-        """Get time entries for the last 30 days."""
-        today = date.today()
-        start_date = today - timedelta(days=30)
+        """Get time entries for the last 30 days (720 hours from now)."""
         all_entries = self._get_all_entries_for_sync_period()
-        return self._filter_entries_by_date(all_entries, start_date, today)
+        return self._filter_entries_by_timestamp(all_entries, hours_ago=720)
 
     def get_current_day_time_entries(self) -> List[Dict]:
         """Get time entries for the current calendar day (today)."""

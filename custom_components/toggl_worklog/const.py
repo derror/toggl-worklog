@@ -48,8 +48,10 @@ SENSOR_CURRENT_MONTH_WORKED_TIME = "current_month_worked_time"
 # API endpoints
 API_BASE_URL = "https://api.track.toggl.com"
 API_REPORTS_URL = f"{API_BASE_URL}/reports/api/v3"
-API_ME_ENDPOINT = f"{API_BASE_URL}/api/v9/me"
+API_V9_URL = f"{API_BASE_URL}/api/v9"
+API_ME_ENDPOINT = f"{API_V9_URL}/me"
 API_TIME_ENTRIES_ENDPOINT = f"{API_REPORTS_URL}/workspace/{{workspace_id}}/search/time_entries"
+API_V9_TIME_ENTRIES_ENDPOINT = f"{API_V9_URL}/me/time_entries"
 
 
 # Sensor attributes
