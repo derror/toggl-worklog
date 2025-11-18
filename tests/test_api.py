@@ -73,24 +73,23 @@ def test_validate_api_token_api_error(toggl_api):
     with pytest.raises(TogglApiError): # The _make_request will raise it, validate_api_token catches and returns False
         assert toggl_api.validate_api_token() == False
 
-@pytest.mark.parametrize("raw_entries, expected_total_duration", [
-    # Single grouping, single entry
-    ([{"time_entries": [{"seconds": 3600}]}], 3600000),
-    # Single grouping, multiple entries
-    ([{"time_entries": [{"seconds": 1800}, {"seconds": 1800}]}], 3600000),
-    # Multiple groupings, multiple entries
-    ([{"time_entries": [{"seconds": 100}]}, {"time_entries": [{"seconds": 200}]}], 300000),
+@pytest.mark.parametrize("flattened_entries, expected_total_duration", [
+    # Single entry
+    ([{"seconds": 3600}], 3600000),
+    # Multiple entries
+    ([{"seconds": 1800}, {"seconds": 1800}], 3600000),
+    # Multiple entries
+    ([{"seconds": 100}, {"seconds": 200}], 300000),
     # No entries
     ([], 0),
-    ([{"time_entries": []}], 0),
     # Entries with None seconds
-    ([{"time_entries": [{"seconds": None}]}], 0),
+    ([{"seconds": None}], 0),
     # Mixed entries
-    ([{"time_entries": [{"seconds": 60}, {"seconds": None}, {"seconds": 120}]}], 180000),
+    ([{"seconds": 60}, {"seconds": None}, {"seconds": 120}], 180000),
 ])
-def test_calculate_total_duration(toggl_api, raw_entries, expected_total_duration):
-    """Test calculate_total_duration method."""
-    assert toggl_api.calculate_total_duration(raw_entries) == expected_total_duration
+def test_calculate_total_duration(toggl_api, flattened_entries, expected_total_duration):
+    """Test calculate_total_duration method with flattened entries."""
+    assert toggl_api.calculate_total_duration(flattened_entries) == expected_total_duration
 
 def test_get_time_entries_flattens_response(toggl_api):
     """Test that get_time_entries flattens the raw response."""

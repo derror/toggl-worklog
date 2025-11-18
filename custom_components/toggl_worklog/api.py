@@ -203,14 +203,18 @@ class TogglApi:
         return self._filter_entries_by_date(all_entries, start_of_month, today)
 
     def calculate_total_duration(self, time_entries: List[Dict]) -> int:
-        """Calculate the total duration from time entries in milliseconds."""
+        """Calculate the total duration from time entries in milliseconds.
+
+        Args:
+            time_entries: A flattened list of individual time entries.
+
+        Returns:
+            Total duration in milliseconds.
+        """
         total_duration = 0
-        # The response is a list of groupings (by user/project/etc.)
-        for grouping in time_entries:
-            # Each grouping contains a list of actual time entries
-            for entry in grouping.get('time_entries', []):
-                if 'seconds' in entry and entry['seconds'] is not None:
-                    total_duration += entry['seconds'] * 1000
+        for entry in time_entries:
+            if 'seconds' in entry and entry['seconds'] is not None:
+                total_duration += entry['seconds'] * 1000
         return total_duration
 
     def _get_worked_time_summary(self, entries_fetcher) -> Dict[str, Any]:
