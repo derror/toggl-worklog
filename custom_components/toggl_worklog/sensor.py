@@ -11,9 +11,10 @@ from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
+    UpdateFailed,
 )
 
-from .api import TogglApi
+from .api import TogglApi, TogglApiError
 from .const import (
     CONF_API_TOKEN,
     CONF_WORKSPACE_ID,
@@ -144,6 +145,9 @@ class TogglWorklogDataUpdateCoordinator(DataUpdateCoordinator):
         """Fetch data from Toggl API."""
         try:
             _LOGGER.info("Updating Toggl Worklog data")
+
+            # Clear cache to ensure fresh data on each update
+            await self.hass.async_add_executor_job(self.api.clear_cache)
 
             # Fetch all data concurrently
             daily_data = await self.hass.async_add_executor_job(self.api.get_daily_worked_time)

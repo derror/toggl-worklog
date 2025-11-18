@@ -217,12 +217,16 @@ class TogglApi:
                 total_duration += entry['seconds'] * 1000
         return total_duration
 
+    def clear_cache(self) -> None:
+        """Clear the cached entries to force a fresh fetch on next request."""
+        self._all_entries_cache = None
+        _LOGGER.debug("Cleared entries cache")
+
     def _get_worked_time_summary(self, entries_fetcher) -> Dict[str, Any]:
         """Helper to get and process time entries."""
-        self._all_entries_cache = None # Clear cache for fresh data
         entries = entries_fetcher()
         total_duration_ms = self.calculate_total_duration(entries)
-        
+
         return {
             "total_duration": total_duration_ms,
             "duration_hours": total_duration_ms // 3600000,
